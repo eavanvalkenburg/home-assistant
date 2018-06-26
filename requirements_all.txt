@@ -11,6 +11,12 @@ pyyaml>=3.11,<4
 requests==2.19.1
 voluptuous==0.11.1
 
+# homeassistant.components.notify.azure_event_grid
+msrest==0.4.29
+
+# homeassistant.components.notify.azure_event_grid
+azure.eventgrid==0.1.0
+
 # homeassistant.components.nuimo_controller
 --only-binary=all nuimo==0.1.0
 
