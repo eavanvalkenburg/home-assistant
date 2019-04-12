@@ -18,7 +18,7 @@ class TestSwitch(unittest.TestCase):
     def setUp(self):
         """Set up things to be run when tests are started."""
         self.hass = get_test_home_assistant()
-        platform = loader.get_component(self.hass, 'switch.test')
+        platform = loader.get_component(self.hass, 'test.switch')
         platform.init()
         # Switch 1 is ON, switch 2 is OFF
         self.switch_1, self.switch_2, self.switch_3 = \
@@ -77,7 +77,7 @@ class TestSwitch(unittest.TestCase):
     def test_setup_two_platforms(self):
         """Test with bad configuration."""
         # Test if switch component returns 0 switches
-        test_platform = loader.get_component(self.hass, 'switch.test')
+        test_platform = loader.get_component(self.hass, 'test.switch')
         test_platform.init(True)
 
         loader.set_component(self.hass, 'switch.test2', test_platform)
@@ -91,7 +91,7 @@ class TestSwitch(unittest.TestCase):
         )
 
 
-async def test_switch_context(hass):
+async def test_switch_context(hass, hass_admin_user):
     """Test that switch context works."""
     assert await async_setup_component(hass, 'switch', {
         'switch': {
@@ -99,14 +99,16 @@ async def test_switch_context(hass):
         }
     })
 
+    await hass.async_block_till_done()
+
     state = hass.states.get('switch.ac')
     assert state is not None
 
     await hass.services.async_call('switch', 'toggle', {
         'entity_id': state.entity_id,
-    }, True, core.Context(user_id='abcd'))
+    }, True, core.Context(user_id=hass_admin_user.id))
 
     state2 = hass.states.get('switch.ac')
     assert state2 is not None
     assert state.state != state2.state
-    assert state2.context.user_id == 'abcd'
+    assert state2.context.user_id == hass_admin_user.id

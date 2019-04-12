@@ -4,7 +4,7 @@ import logging.handlers
 from timeit import default_timer as timer
 
 from types import ModuleType
-from typing import Optional, Dict, List
+from typing import Awaitable, Callable, Optional, Dict, List
 
 from homeassistant import requirements, core, loader, config as conf_util
 from homeassistant.config import async_notify_setup_error
@@ -63,7 +63,7 @@ async def _async_process_dependencies(
     blacklisted = [dep for dep in dependencies
                    if dep in loader.DEPENDENCY_BLACKLIST]
 
-    if blacklisted:
+    if blacklisted and name != 'default_config':
         _LOGGER.error("Unable to set up dependencies of %s: "
                       "found blacklisted dependencies: %s",
                       name, ', '.join(blacklisted))
@@ -100,18 +100,30 @@ async def _async_setup_component(hass: core.HomeAssistant,
         _LOGGER.error("Setup failed for %s: %s", domain, msg)
         async_notify_setup_error(hass, domain, link)
 
-    component = loader.get_component(hass, domain)
-
-    if not component:
-        log_error("Component not found.", False)
+    try:
+        integration = await loader.async_get_integration(hass, domain)
+    except loader.IntegrationNotFound:
+        log_error("Integration not found.", False)
         return False
 
-    # Validate no circular dependencies
-    components = loader.load_order_component(hass, domain)
+    try:
+        component = integration.get_component()
+    except ImportError:
+        log_error("Unable to import component", False)
+        return False
 
-    # OrderedSet is empty if component or dependencies could not be resolved
-    if not components:
-        log_error("Unable to resolve component or dependencies.")
+    # Validate all dependencies exist and there are no circular dependencies
+    try:
+        await loader.async_component_dependencies(hass, domain)
+    except loader.IntegrationNotFound as err:
+        _LOGGER.error(
+            "Not setting up %s because we are unable to resolve "
+            "(sub)dependency %s", domain, err.domain)
+        return False
+    except loader.CircularDependency as err:
+        _LOGGER.error(
+            "Not setting up %s because it contains a circular dependency: "
+            "%s -> %s", domain, err.from_domain, err.to_domain)
         return False
 
     processed_config = \
@@ -122,7 +134,7 @@ async def _async_setup_component(hass: core.HomeAssistant,
         return False
 
     try:
-        await async_process_deps_reqs(hass, config, domain, component)
+        await async_process_deps_reqs(hass, config, integration)
     except HomeAssistantError as err:
         log_error(str(err))
         return False
@@ -177,31 +189,38 @@ async def _async_setup_component(hass: core.HomeAssistant,
 
     hass.bus.async_fire(
         EVENT_COMPONENT_LOADED,
-        {ATTR_COMPONENT: component.DOMAIN}  # type: ignore
+        {ATTR_COMPONENT: component.DOMAIN}    # type: ignore
     )
 
     return True
 
 
-async def async_prepare_setup_platform(hass: core.HomeAssistant, config: Dict,
+async def async_prepare_setup_platform(hass: core.HomeAssistant,
+                                       hass_config: Dict,
                                        domain: str, platform_name: str) \
                                  -> Optional[ModuleType]:
     """Load a platform and makes sure dependencies are setup.
 
     This method is a coroutine.
     """
-    platform_path = PLATFORM_FORMAT.format(domain, platform_name)
+    platform_path = PLATFORM_FORMAT.format(domain=domain,
+                                           platform=platform_name)
 
     def log_error(msg: str) -> None:
         """Log helper."""
         _LOGGER.error("Unable to prepare setup for platform %s: %s",
-                      platform_path, msg)
+                      platform_name, msg)
         async_notify_setup_error(hass, platform_path)
 
-    platform = loader.get_platform(hass, domain, platform_name)
+    try:
+        integration = await loader.async_get_integration(hass, platform_name)
+    except loader.IntegrationNotFound:
+        log_error("Integration not found")
+        return None
 
-    # Not found
-    if platform is None:
+    try:
+        platform = integration.get_platform(domain)
+    except ImportError:
         log_error("Platform not found.")
         return None
 
@@ -209,9 +228,25 @@ async def async_prepare_setup_platform(hass: core.HomeAssistant, config: Dict,
     if platform_path in hass.config.components:
         return platform
 
+    # Platforms cannot exist on their own, they are part of their integration.
+    # If the integration is not set up yet, and can be set up, set it up.
+    if integration.domain not in hass.config.components:
+        try:
+            component = integration.get_component()
+        except ImportError:
+            log_error("Unable to import the component")
+            return None
+
+        if (hasattr(component, 'setup')
+                or hasattr(component, 'async_setup')):
+            if not await async_setup_component(
+                    hass, integration.domain, hass_config
+            ):
+                log_error("Unable to set up component.")
+                return None
+
     try:
-        await async_process_deps_reqs(
-            hass, config, platform_path, platform)
+        await async_process_deps_reqs(hass, hass_config, integration)
     except HomeAssistantError as err:
         log_error(str(err))
         return None
@@ -220,8 +255,8 @@ async def async_prepare_setup_platform(hass: core.HomeAssistant, config: Dict,
 
 
 async def async_process_deps_reqs(
-        hass: core.HomeAssistant, config: Dict, name: str,
-        module: ModuleType) -> None:
+        hass: core.HomeAssistant, config: Dict,
+        integration: loader.Integration) -> None:
     """Process all dependencies and requirements for a module.
 
     Module is a Python module of either a component or platform.
@@ -230,21 +265,52 @@ async def async_process_deps_reqs(
 
     if processed is None:
         processed = hass.data[DATA_DEPS_REQS] = set()
-    elif name in processed:
+    elif integration.domain in processed:
         return
 
-    if hasattr(module, 'DEPENDENCIES'):
-        dep_success = await _async_process_dependencies(
-            hass, config, name, module.DEPENDENCIES)  # type: ignore
+    if integration.dependencies and not await _async_process_dependencies(
+            hass,
+            config,
+            integration.domain,
+            integration.dependencies
+    ):
+        raise HomeAssistantError("Could not set up all dependencies.")
 
-        if not dep_success:
-            raise HomeAssistantError("Could not set up all dependencies.")
+    if (not hass.config.skip_pip and integration.requirements and
+            not await requirements.async_process_requirements(
+                hass, integration.domain, integration.requirements)):
+        raise HomeAssistantError("Could not install all requirements.")
 
-    if not hass.config.skip_pip and hasattr(module, 'REQUIREMENTS'):
-        req_success = await requirements.async_process_requirements(
-            hass, name, module.REQUIREMENTS)  # type: ignore
+    processed.add(integration.domain)
 
-        if not req_success:
-            raise HomeAssistantError("Could not install all requirements.")
 
-    processed.add(name)
+@core.callback
+def async_when_setup(
+        hass: core.HomeAssistant, component: str,
+        when_setup_cb: Callable[
+            [core.HomeAssistant, str], Awaitable[None]]) -> None:
+    """Call a method when a component is setup."""
+    async def when_setup() -> None:
+        """Call the callback."""
+        try:
+            await when_setup_cb(hass, component)
+        except Exception:  # pylint: disable=broad-except
+            _LOGGER.exception('Error handling when_setup callback for %s',
+                              component)
+
+    # Running it in a new task so that it always runs after
+    if component in hass.config.components:
+        hass.async_create_task(when_setup())
+        return
+
+    unsub = None
+
+    async def loaded_event(event: core.Event) -> None:
+        """Call the callback."""
+        if event.data[ATTR_COMPONENT] != component:
+            return
+
+        unsub()  # type: ignore
+        await when_setup()
+
+    unsub = hass.bus.async_listen(EVENT_COMPONENT_LOADED, loaded_event)

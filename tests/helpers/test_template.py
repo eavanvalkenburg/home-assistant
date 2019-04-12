@@ -4,6 +4,7 @@ from datetime import datetime
 import unittest
 import random
 import math
+import pytz
 from unittest.mock import patch
 
 from homeassistant.components import group
@@ -14,6 +15,7 @@ from homeassistant.const import (
     LENGTH_METERS,
     TEMP_CELSIUS,
     MASS_GRAMS,
+    PRESSURE_PA,
     VOLUME_LITERS,
     MATCH_ALL,
 )
@@ -32,7 +34,7 @@ class TestHelpersTemplate(unittest.TestCase):
         self.hass = get_test_home_assistant()
         self.hass.config.units = UnitSystem('custom', TEMP_CELSIUS,
                                             LENGTH_METERS, VOLUME_LITERS,
-                                            MASS_GRAMS)
+                                            MASS_GRAMS, PRESSURE_PA)
 
     # pylint: disable=invalid-name
     def tearDown(self):
@@ -93,6 +95,16 @@ class TestHelpersTemplate(unittest.TestCase):
         assert '128' == \
             template.Template(
                 '{{ states.sensor.temperature.state | multiply(10) | round }}',
+                self.hass).render()
+
+        assert '12.7' == \
+            template.Template(
+                '{{ states.sensor.temperature.state | round(1, "floor") }}',
+                self.hass).render()
+
+        assert '12.8' == \
+            template.Template(
+                '{{ states.sensor.temperature.state | round(1, "ceil") }}',
                 self.hass).render()
 
     def test_rounding_value_get_original_value_on_error(self):
@@ -274,6 +286,37 @@ class TestHelpersTemplate(unittest.TestCase):
             template.Template('{{ [1, 2, 3] | max }}',
                               self.hass).render()
 
+    def test_base64_encode(self):
+        """Test the base64_encode filter."""
+        self.assertEqual(
+            'aG9tZWFzc2lzdGFudA==',
+            template.Template('{{ "homeassistant" | base64_encode }}',
+                              self.hass).render())
+
+    def test_base64_decode(self):
+        """Test the base64_decode filter."""
+        self.assertEqual(
+            'homeassistant',
+            template.Template('{{ "aG9tZWFzc2lzdGFudA==" | base64_decode }}',
+                              self.hass).render())
+
+    def test_ordinal(self):
+        """Test the ordinal filter."""
+        tests = [
+            (1, '1st'),
+            (2, '2nd'),
+            (3, '3rd'),
+            (4, '4th'),
+            (5, '5th'),
+        ]
+
+        for value, expected in tests:
+            self.assertEqual(
+                expected,
+                template.Template(
+                    '{{ %s | ordinal }}' % value,
+                    self.hass).render())
+
     def test_timestamp_utc(self):
         """Test the timestamps to local filter."""
         now = dt_util.utcnow()
@@ -390,6 +433,16 @@ class TestHelpersTemplate(unittest.TestCase):
         tpl = template.Template('{{ value_json.bye|is_defined }}', self.hass)
         assert '' == \
             tpl.render_with_possible_json_value('{"hello": "world"}', '')
+
+    def test_render_with_possible_json_value_non_string_value(self):
+        """Render with possible JSON value with non-string value."""
+        tpl = template.Template("""
+{{ strptime(value~'+0000', '%Y-%m-%d %H:%M:%S%z') }}
+            """, self.hass)
+        value = datetime(2019, 1, 18, 12, 13, 14)
+        expected = str(pytz.utc.localize(value))
+        assert expected == \
+            tpl.render_with_possible_json_value(value)
 
     def test_raise_exception_on_error(self):
         """Test raising an exception on error."""

@@ -1,11 +1,7 @@
-"""
-Component to send and receive Telegram messages.
-
-For more details about this platform, please refer to the documentation at
-https://home-assistant.io/components/telegram_bot/
-"""
+"""Support to send and receive Telegram messages."""
 import io
 from functools import partial
+import importlib
 import logging
 
 import requests
@@ -19,7 +15,6 @@ from homeassistant.const import (
     CONF_PLATFORM, CONF_TIMEOUT, HTTP_DIGEST_AUTHENTICATION)
 import homeassistant.helpers.config_validation as cv
 from homeassistant.exceptions import TemplateError
-from homeassistant.setup import async_prepare_setup_platform
 
 REQUIREMENTS = ['python-telegram-bot==11.1.0']
 
@@ -53,6 +48,7 @@ ATTR_TEXT = 'text'
 ATTR_URL = 'url'
 ATTR_USER_ID = 'user_id'
 ATTR_USERNAME = 'username'
+ATTR_VERIFY_SSL = 'verify_ssl'
 
 CONF_ALLOWED_CHAT_IDS = 'allowed_chat_ids'
 CONF_PROXY_URL = 'proxy_url'
@@ -80,7 +76,7 @@ PARSER_HTML = 'html'
 PARSER_MD = 'markdown'
 
 PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend({
-    vol.Required(CONF_PLATFORM): cv.string,
+    vol.Required(CONF_PLATFORM): vol.In(('broadcast', 'polling', 'webhooks')),
     vol.Required(CONF_API_KEY): cv.string,
     vol.Required(CONF_ALLOWED_CHAT_IDS):
         vol.All(cv.ensure_list, [vol.Coerce(int)]),
@@ -88,6 +84,8 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend({
     vol.Optional(CONF_PROXY_URL): cv.string,
     vol.Optional(CONF_PROXY_PARAMS): dict,
 })
+
+PLATFORM_SCHEMA_BASE = cv.PLATFORM_SCHEMA_BASE.extend(PLATFORM_SCHEMA.schema)
 
 BASE_SERVICE_SCHEMA = vol.Schema({
     vol.Optional(ATTR_TARGET): vol.All(cv.ensure_list, [vol.Coerce(int)]),
@@ -111,6 +109,7 @@ SERVICE_SCHEMA_SEND_FILE = BASE_SERVICE_SCHEMA.extend({
     vol.Optional(ATTR_USERNAME): cv.string,
     vol.Optional(ATTR_PASSWORD): cv.string,
     vol.Optional(ATTR_AUTHENTICATION): cv.string,
+    vol.Optional(ATTR_VERIFY_SSL): cv.boolean,
 })
 
 SERVICE_SCHEMA_SEND_LOCATION = BASE_SERVICE_SCHEMA.extend({
@@ -167,7 +166,7 @@ SERVICE_MAP = {
 
 
 def load_data(hass, url=None, filepath=None, username=None, password=None,
-              authentication=None, num_retries=5):
+              authentication=None, num_retries=5, verify_ssl=None):
     """Load data into ByteIO/File container from a source."""
     try:
         if url is not None:
@@ -178,6 +177,8 @@ def load_data(hass, url=None, filepath=None, username=None, password=None,
                     params["auth"] = HTTPDigestAuth(username, password)
                 else:
                     params["auth"] = HTTPBasicAuth(username, password)
+            if verify_ssl:
+                params["verify"] = verify_ssl
             retry_num = 0
             while retry_num < num_retries:
                 req = requests.get(url, **params)
@@ -218,11 +219,8 @@ async def async_setup(hass, config):
 
     p_type = p_config.get(CONF_PLATFORM)
 
-    platform = await async_prepare_setup_platform(
-        hass, config, DOMAIN, p_type)
-
-    if platform is None:
-        return
+    platform = importlib.import_module('.{}'.format(config[CONF_PLATFORM]),
+                                       __name__)
 
     _LOGGER.info("Setting up %s.%s", DOMAIN, p_type)
     try:
@@ -539,6 +537,7 @@ class TelegramNotificationService:
             username=kwargs.get(ATTR_USERNAME),
             password=kwargs.get(ATTR_PASSWORD),
             authentication=kwargs.get(ATTR_AUTHENTICATION),
+            verify_ssl=kwargs.get(ATTR_VERIFY_SSL),
         )
         if file_content:
             for chat_id in self._get_target_chat_ids(target):
@@ -633,7 +632,7 @@ class BaseTelegramBotEntity:
 
             self.hass.bus.async_fire(event, event_data)
             return True
-        elif ATTR_CALLBACK_QUERY in data:
+        if ATTR_CALLBACK_QUERY in data:
             event = EVENT_TELEGRAM_CALLBACK
             data = data.get(ATTR_CALLBACK_QUERY)
             message_ok, event_data = self._get_message_data(data)
@@ -647,6 +646,6 @@ class BaseTelegramBotEntity:
 
             self.hass.bus.async_fire(event, event_data)
             return True
-        else:
-            _LOGGER.warning("Message with unknown data received: %s", data)
-            return True
+
+        _LOGGER.warning("Message with unknown data received: %s", data)
+        return True

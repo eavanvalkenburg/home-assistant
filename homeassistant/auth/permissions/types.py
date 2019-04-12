@@ -1,6 +1,5 @@
 """Common code for permissions."""
-from typing import (  # noqa: F401
-    Mapping, Union, Any)
+from typing import Mapping, Union
 
 # MyPy doesn't support recursion yet. So writing it out as far as we need.
 
@@ -11,9 +10,11 @@ ValueType = Union[
     None
 ]
 
+# Example: entities.domains = { light: … }
+SubCategoryDict = Mapping[str, ValueType]
+
 SubCategoryType = Union[
-    # Example: entities.domains = { light: … }
-    Mapping[str, ValueType],
+    SubCategoryDict,
     bool,
     None
 ]

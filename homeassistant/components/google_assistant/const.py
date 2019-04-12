@@ -19,10 +19,9 @@ DEFAULT_EXPOSED_DOMAINS = [
     'media_player', 'scene', 'script', 'switch', 'vacuum', 'lock',
 ]
 DEFAULT_ALLOW_UNLOCK = False
-CLIMATE_MODE_HEATCOOL = 'heatcool'
-CLIMATE_SUPPORTED_MODES = {'heat', 'cool', 'off', 'on', CLIMATE_MODE_HEATCOOL}
 
 PREFIX_TYPES = 'action.devices.types.'
+TYPE_CAMERA = PREFIX_TYPES + 'CAMERA'
 TYPE_LIGHT = PREFIX_TYPES + 'LIGHT'
 TYPE_SWITCH = PREFIX_TYPES + 'SWITCH'
 TYPE_VACUUM = PREFIX_TYPES + 'VACUUM'
@@ -30,6 +29,7 @@ TYPE_SCENE = PREFIX_TYPES + 'SCENE'
 TYPE_FAN = PREFIX_TYPES + 'FAN'
 TYPE_THERMOSTAT = PREFIX_TYPES + 'THERMOSTAT'
 TYPE_LOCK = PREFIX_TYPES + 'LOCK'
+TYPE_BLINDS = PREFIX_TYPES + 'BLINDS'
 
 SERVICE_REQUEST_SYNC = 'request_sync'
 HOMEGRAPH_URL = 'https://homegraph.googleapis.com/'
@@ -44,3 +44,8 @@ ERR_NOT_SUPPORTED = "notSupported"
 ERR_PROTOCOL_ERROR = 'protocolError'
 ERR_UNKNOWN_ERROR = 'unknownError'
 ERR_FUNCTION_NOT_SUPPORTED = 'functionNotSupported'
+
+# Event types
+EVENT_COMMAND_RECEIVED = 'google_assistant_command'
+EVENT_QUERY_RECEIVED = 'google_assistant_query'
+EVENT_SYNC_RECEIVED = 'google_assistant_sync'

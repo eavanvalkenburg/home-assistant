@@ -5,9 +5,12 @@ import os
 import unittest
 import unittest.mock as mock
 from collections import OrderedDict
+from ipaddress import ip_network
 
+import asynctest
 import pytest
 from voluptuous import MultipleInvalid, Invalid
+import yaml
 
 from homeassistant.core import DOMAIN, HomeAssistantError, Config
 import homeassistant.config as config_util
@@ -31,7 +34,8 @@ from homeassistant.components.config.customize import (
     CONFIG_PATH as CUSTOMIZE_CONFIG_PATH)
 import homeassistant.scripts.check_config as check_config
 
-from tests.common import get_test_config_dir, get_test_home_assistant
+from tests.common import (
+    get_test_config_dir, get_test_home_assistant, patch_yaml_files)
 
 CONFIG_DIR = get_test_config_dir()
 YAML_PATH = os.path.join(CONFIG_DIR, config_util.YAML_CONFIG_FILE)
@@ -550,6 +554,30 @@ class TestConfig(unittest.TestCase):
         ).result() == 'bad'
 
 
+@asynctest.mock.patch('homeassistant.config.os.path.isfile',
+                      mock.Mock(return_value=True))
+async def test_async_hass_config_yaml_merge(merge_log_err, hass):
+    """Test merge during async config reload."""
+    config = {
+        config_util.CONF_CORE: {config_util.CONF_PACKAGES: {
+            'pack_dict': {
+                'input_boolean': {'ib1': None}}}},
+        'input_boolean': {'ib2': None},
+        'light': {'platform': 'test'}
+    }
+
+    files = {config_util.YAML_CONFIG_FILE: yaml.dump(config)}
+    with patch_yaml_files(files, True):
+        conf = await config_util.async_hass_config_yaml(hass)
+
+    assert merge_log_err.call_count == 0
+    assert conf[config_util.CONF_CORE].get(config_util.CONF_PACKAGES) \
+        is not None
+    assert len(conf) == 3
+    assert len(conf['input_boolean']) == 2
+    assert len(conf['light']) == 1
+
+
 # pylint: disable=redefined-outer-name
 @pytest.fixture
 def merge_log_err(hass):
@@ -794,7 +822,7 @@ async def test_auth_provider_config(hass):
         'time_zone': 'GMT',
         CONF_AUTH_PROVIDERS: [
             {'type': 'homeassistant'},
-            {'type': 'legacy_api_password'},
+            {'type': 'legacy_api_password', 'api_password': 'some-pass'},
         ],
         CONF_AUTH_MFA_MODULES: [
             {'type': 'totp'},
@@ -808,7 +836,6 @@ async def test_auth_provider_config(hass):
     assert len(hass.auth.auth_providers) == 2
     assert hass.auth.auth_providers[0].type == 'homeassistant'
     assert hass.auth.auth_providers[1].type == 'legacy_api_password'
-    assert hass.auth.active is True
     assert len(hass.auth.auth_mfa_modules) == 2
     assert hass.auth.auth_mfa_modules[0].id == 'totp'
     assert hass.auth.auth_mfa_modules[1].id == 'second'
@@ -830,7 +857,6 @@ async def test_auth_provider_config_default(hass):
 
     assert len(hass.auth.auth_providers) == 1
     assert hass.auth.auth_providers[0].type == 'homeassistant'
-    assert hass.auth.active is True
     assert len(hass.auth.auth_mfa_modules) == 1
     assert hass.auth.auth_mfa_modules[0].id == 'totp'
 
@@ -847,12 +873,12 @@ async def test_auth_provider_config_default_api_password(hass):
     }
     if hasattr(hass, 'auth'):
         del hass.auth
-    await config_util.async_process_ha_core_config(hass, core_config, True)
+    await config_util.async_process_ha_core_config(hass, core_config, 'pass')
 
     assert len(hass.auth.auth_providers) == 2
     assert hass.auth.auth_providers[0].type == 'homeassistant'
     assert hass.auth.auth_providers[1].type == 'legacy_api_password'
-    assert hass.auth.active is True
+    assert hass.auth.auth_providers[1].api_password == 'pass'
 
 
 async def test_auth_provider_config_default_trusted_networks(hass):
@@ -867,13 +893,14 @@ async def test_auth_provider_config_default_trusted_networks(hass):
     }
     if hasattr(hass, 'auth'):
         del hass.auth
-    await config_util.async_process_ha_core_config(hass, core_config,
-                                                   has_trusted_networks=True)
+    await config_util.async_process_ha_core_config(
+        hass, core_config, trusted_networks=['192.168.0.1'])
 
     assert len(hass.auth.auth_providers) == 2
     assert hass.auth.auth_providers[0].type == 'homeassistant'
     assert hass.auth.auth_providers[1].type == 'trusted_networks'
-    assert hass.auth.active is True
+    assert hass.auth.auth_providers[1].trusted_networks[0] == ip_network(
+        '192.168.0.1')
 
 
 async def test_disallowed_auth_provider_config(hass):
