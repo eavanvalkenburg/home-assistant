@@ -1,9 +1,4 @@
-"""
-Support for Tibber.
-
-For more details about this platform, please refer to the documentation at
-https://home-assistant.io/components/tibber/
-"""
+"""Support for Tibber."""
 import asyncio
 import logging
 
@@ -16,7 +11,7 @@ from homeassistant.const import (EVENT_HOMEASSISTANT_STOP, CONF_ACCESS_TOKEN,
 from homeassistant.helpers import discovery
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-REQUIREMENTS = ['pyTibber==0.7.2']
+REQUIREMENTS = ['pyTibber==0.10.1']
 
 DOMAIN = 'tibber'
 
@@ -45,7 +40,14 @@ async def async_setup(hass, config):
 
     try:
         await tibber_connection.update_info()
-    except (asyncio.TimeoutError, aiohttp.ClientError):
+    except asyncio.TimeoutError as err:
+        _LOGGER.error("Timeout connecting to Tibber: %s ", err)
+        return False
+    except aiohttp.ClientError as err:
+        _LOGGER.error("Error connecting to Tibber: %s ", err)
+        return False
+    except tibber.InvalidLogin as exp:
+        _LOGGER.error("Failed to login. %s", exp)
         return False
 
     for component in ['sensor', 'notify']:

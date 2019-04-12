@@ -1,9 +1,4 @@
-"""
-Handle the frontend for Home Assistant.
-
-For more details about this component, please refer to the documentation at
-https://home-assistant.io/components/frontend/
-"""
+"""Handle the frontend for Home Assistant."""
 import asyncio
 import json
 import logging
@@ -24,7 +19,9 @@ from homeassistant.core import callback
 from homeassistant.helpers.translation import async_get_translations
 from homeassistant.loader import bind_hass
 
-REQUIREMENTS = ['home-assistant-frontend==20181014.0']
+from .storage import async_setup_frontend_storage
+
+REQUIREMENTS = ['home-assistant-frontend==20190410.0']
 
 DOMAIN = 'frontend'
 DEPENDENCIES = ['api', 'websocket_api', 'http', 'system_log',
@@ -55,8 +52,8 @@ MANIFEST_JSON = {
 
 for size in (192, 384, 512, 1024):
     MANIFEST_JSON['icons'].append({
-        'src': '/static/icons/favicon-{}x{}.png'.format(size, size),
-        'sizes': '{}x{}'.format(size, size),
+        'src': '/static/icons/favicon-{size}x{size}.png'.format(size=size),
+        'sizes': '{size}x{size}'.format(size=size),
         'type': 'image/png'
     })
 
@@ -126,14 +123,18 @@ class Panel:
     # Config to pass to the webcomponent
     config = None
 
+    # If the panel should only be visible to admins
+    require_admin = False
+
     def __init__(self, component_name, sidebar_title, sidebar_icon,
-                 frontend_url_path, config):
+                 frontend_url_path, config, require_admin):
         """Initialize a built-in panel."""
         self.component_name = component_name
         self.sidebar_title = sidebar_title
         self.sidebar_icon = sidebar_icon
         self.frontend_url_path = frontend_url_path or component_name
         self.config = config
+        self.require_admin = require_admin
 
     @callback
     def async_register_index_routes(self, router, index_view):
@@ -153,16 +154,18 @@ class Panel:
             'title': self.sidebar_title,
             'config': self.config,
             'url_path': self.frontend_url_path,
+            'require_admin': self.require_admin,
         }
 
 
 @bind_hass
 async def async_register_built_in_panel(hass, component_name,
                                         sidebar_title=None, sidebar_icon=None,
-                                        frontend_url_path=None, config=None):
+                                        frontend_url_path=None, config=None,
+                                        require_admin=False):
     """Register a built-in panel."""
     panel = Panel(component_name, sidebar_title, sidebar_icon,
-                  frontend_url_path, config)
+                  frontend_url_path, config, require_admin)
 
     panels = hass.data.get(DATA_PANELS)
     if panels is None:
@@ -195,6 +198,7 @@ def add_manifest_json_key(key, val):
 
 async def async_setup(hass, config):
     """Set up the serving of the frontend."""
+    await async_setup_frontend_storage(hass)
     hass.components.websocket_api.async_register_command(
         WS_TYPE_GET_PANELS, websocket_get_panels, SCHEMA_GET_PANELS)
     hass.components.websocket_api.async_register_command(
@@ -238,7 +242,7 @@ async def async_setup(hass, config):
     if os.path.isdir(local):
         hass.http.register_static_path("/local", local, not is_dev)
 
-    index_view = IndexView(repo_path, js_version, hass.auth.active)
+    index_view = IndexView(repo_path, js_version)
     hass.http.register_view(index_view)
     hass.http.register_view(AuthorizeView(repo_path, js_version))
 
@@ -249,9 +253,11 @@ async def async_setup(hass, config):
 
     await asyncio.wait(
         [async_register_built_in_panel(hass, panel) for panel in (
-            'dev-event', 'dev-info', 'dev-service', 'dev-state',
-            'dev-template', 'dev-mqtt', 'kiosk', 'lovelace', 'profile')],
-        loop=hass.loop)
+            'kiosk', 'states', 'profile')], loop=hass.loop)
+    await asyncio.wait(
+        [async_register_built_in_panel(hass, panel, require_admin=True)
+         for panel in ('dev-event', 'dev-info', 'dev-service', 'dev-state',
+                       'dev-template', 'dev-mqtt')], loop=hass.loop)
 
     hass.data[DATA_FINALIZE_PANEL] = async_finalize_panel
 
@@ -362,13 +368,11 @@ class IndexView(HomeAssistantView):
     url = '/'
     name = 'frontend:index'
     requires_auth = False
-    extra_urls = ['/states', '/states/{extra}']
 
-    def __init__(self, repo_path, js_option, auth_active):
+    def __init__(self, repo_path, js_option):
         """Initialize the frontend view."""
         self.repo_path = repo_path
         self.js_option = js_option
-        self.auth_active = auth_active
         self._template_cache = {}
 
     def get_template(self, latest):
@@ -411,11 +415,9 @@ class IndexView(HomeAssistantView):
             })
 
         no_auth = '1'
-        if hass.config.api.api_password and not request[KEY_AUTHENTICATED]:
+        if not request[KEY_AUTHENTICATED]:
             # do not try to auto connect on load
             no_auth = '0'
-
-        use_oauth = '1' if self.auth_active else '0'
 
         template = await hass.async_add_job(self.get_template, latest)
 
@@ -425,7 +427,7 @@ class IndexView(HomeAssistantView):
             no_auth=no_auth,
             theme_color=MANIFEST_JSON['theme_color'],
             extra_urls=hass.data[extra_key],
-            use_oauth=use_oauth
+            use_oauth='1'
         )
 
         return web.Response(text=template.render(**template_params),
@@ -484,9 +486,11 @@ def websocket_get_panels(hass, connection, msg):
 
     Async friendly.
     """
+    user_is_admin = connection.user.is_admin
     panels = {
-        panel: connection.hass.data[DATA_PANELS][panel].to_response()
-        for panel in connection.hass.data[DATA_PANELS]}
+        panel_key: panel.to_response()
+        for panel_key, panel in connection.hass.data[DATA_PANELS].items()
+        if user_is_admin or not panel.require_admin}
 
     connection.send_message(websocket_api.result_message(
         msg['id'], panels))

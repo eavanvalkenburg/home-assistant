@@ -79,15 +79,15 @@ class TestHelpersDiscovery:
                                   platform_callback)
 
         discovery.load_platform(self.hass, 'test_component', 'test_platform',
-                                'discovery info')
+                                'discovery info', {'test_component': {}})
         self.hass.block_till_done()
         assert mock_setup_component.called
         assert mock_setup_component.call_args[0] == \
-            (self.hass, 'test_component', None)
+            (self.hass, 'test_component', {'test_component': {}})
         self.hass.block_till_done()
 
         discovery.load_platform(self.hass, 'test_component_2', 'test_platform',
-                                'discovery info')
+                                'discovery info', {'test_component': {}})
         self.hass.block_till_done()
 
         assert len(calls) == 1
@@ -132,10 +132,14 @@ class TestHelpersDiscovery:
             self.hass, 'test_component',
             MockModule('test_component', setup=component_setup))
 
+        # dependencies are only set in component level
+        # since we are using manifest to hold them
         loader.set_component(
-            self.hass, 'switch.test_circular',
-            MockPlatform(setup_platform,
-                         dependencies=['test_component']))
+            self.hass, 'test_circular',
+            MockModule('test_circular', dependencies=['test_component']))
+        loader.set_component(
+            self.hass, 'test_circular.switch',
+            MockPlatform(setup_platform))
 
         setup.setup_component(self.hass, 'test_component', {
             'test_component': None,
@@ -202,7 +206,8 @@ class TestHelpersDiscovery:
 async def test_load_platform_forbids_config():
     """Test you cannot setup config component with load_platform."""
     with pytest.raises(HomeAssistantError):
-        await discovery.async_load_platform(None, 'config', 'zwave')
+        await discovery.async_load_platform(None, 'config', 'zwave', {},
+                                            {'config': {}})
 
 
 async def test_discover_forbids_config():

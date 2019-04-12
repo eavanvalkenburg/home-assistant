@@ -6,7 +6,7 @@ import pytest
 from homeassistant.core import State
 import homeassistant.components.cover as cover
 import homeassistant.components.climate as climate
-import homeassistant.components.media_player as media_player
+import homeassistant.components.media_player.const as media_player_c
 from homeassistant.components.homekit import get_accessory, TYPES
 from homeassistant.components.homekit.const import (
     CONF_FEATURE_LIST, FEATURE_ON_OFF, TYPE_FAUCET, TYPE_OUTLET, TYPE_SHOWER,
@@ -60,15 +60,16 @@ def test_customize_options(config, name):
     ('Light', 'light.test', 'on', {}, {}),
     ('Lock', 'lock.test', 'locked', {}, {ATTR_CODE: '1234'}),
     ('MediaPlayer', 'media_player.test', 'on',
-     {ATTR_SUPPORTED_FEATURES: media_player.SUPPORT_TURN_ON |
-      media_player.SUPPORT_TURN_OFF}, {CONF_FEATURE_LIST:
-                                       {FEATURE_ON_OFF: None}}),
+     {ATTR_SUPPORTED_FEATURES: media_player_c.SUPPORT_TURN_ON |
+      media_player_c.SUPPORT_TURN_OFF}, {CONF_FEATURE_LIST:
+                                         {FEATURE_ON_OFF: None}}),
     ('SecuritySystem', 'alarm_control_panel.test', 'armed_away', {},
      {ATTR_CODE: '1234'}),
     ('Thermostat', 'climate.test', 'auto', {}, {}),
     ('Thermostat', 'climate.test', 'auto',
      {ATTR_SUPPORTED_FEATURES: climate.SUPPORT_TARGET_TEMPERATURE_LOW |
       climate.SUPPORT_TARGET_TEMPERATURE_HIGH}, {}),
+    ('WaterHeater', 'water_heater.test', 'auto', {}, {}),
 ])
 def test_types(type_name, entity_id, state, attrs, config):
     """Test if types are associated correctly."""
@@ -138,6 +139,7 @@ def test_type_sensors(type_name, entity_id, state, attrs):
     ('Switch', 'automation.test', 'on', {}, {}),
     ('Switch', 'input_boolean.test', 'on', {}, {}),
     ('Switch', 'remote.test', 'on', {}, {}),
+    ('Switch', 'scene.test', 'on', {}, {}),
     ('Switch', 'script.test', 'on', {}, {}),
     ('Switch', 'switch.test', 'on', {}, {}),
     ('Switch', 'switch.test', 'on', {}, {CONF_TYPE: TYPE_SWITCH}),

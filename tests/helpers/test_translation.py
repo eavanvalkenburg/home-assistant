@@ -40,7 +40,10 @@ def test_flatten():
 async def test_component_translation_file(hass):
     """Test the component translation file function."""
     assert await async_setup_component(hass, 'switch', {
-        'switch': {'platform': 'test'}
+        'switch': [
+            {'platform': 'test'},
+            {'platform': 'test_embedded'}
+        ]
     })
     assert await async_setup_component(hass, 'test_standalone', {
         'test_standalone'
@@ -51,7 +54,12 @@ async def test_component_translation_file(hass):
 
     assert path.normpath(translation.component_translation_file(
         hass, 'switch.test', 'en')) == path.normpath(hass.config.path(
-            'custom_components', 'switch', '.translations', 'test.en.json'))
+            'custom_components', 'test', '.translations', 'switch.en.json'))
+
+    assert path.normpath(translation.component_translation_file(
+        hass, 'switch.test_embedded', 'en')) == path.normpath(hass.config.path(
+            'custom_components', 'test_embedded', '.translations',
+            'switch.en.json'))
 
     assert path.normpath(translation.component_translation_file(
         hass, 'test_standalone', 'en')) == path.normpath(hass.config.path(
@@ -66,9 +74,9 @@ def test_load_translations_files(hass):
     """Test the load translation files function."""
     # Test one valid and one invalid file
     file1 = hass.config.path(
-        'custom_components', 'switch', '.translations', 'test.en.json')
+        'custom_components', 'test', '.translations', 'switch.en.json')
     file2 = hass.config.path(
-        'custom_components', 'switch', '.translations', 'invalid.json')
+        'custom_components', 'test', '.translations', 'invalid.json')
     assert translation.load_translations_files({
         'switch.test': file1,
         'invalid': file2
