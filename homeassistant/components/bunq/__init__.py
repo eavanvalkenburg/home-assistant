@@ -1,0 +1,1 @@
+"""The Bunq component."""

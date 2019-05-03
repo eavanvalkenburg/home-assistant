@@ -1,0 +1,12 @@
+{
+    "domain": "bunq",
+    "name": "Bunq",
+    "documentation": "https://www.home-assistant.io/components/bunq",
+    "requirements": [
+      "bunq-sdk>=1.10.1"
+    ],
+    "dependencies": [],
+    "codeowners": [
+        "@eavanvalkenburg"
+    ]
+  }
