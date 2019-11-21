@@ -111,6 +111,9 @@ av==6.1.2
 # homeassistant.components.axis
 axis==25
 
+# homeassistant.components.azure_event_hub
+azure-eventhub==5.0.0b5
+
 # homeassistant.components.zha
 bellows-homeassistant==0.13.1
 
@@ -216,13 +219,13 @@ gios==0.0.3
 # homeassistant.components.glances
 glances_api==0.2.0
 
-# homeassistant.components.google
+# homeassistant.components.Google
 google-api-python-client==1.6.4
 
 # homeassistant.components.google_pubsub
 google-cloud-pubsub==0.39.1
 
-# homeassistant.components.ffmpeg
+# homeassistant.components.FFmpeg
 ha-ffmpeg==2.0
 
 # homeassistant.components.hangouts
@@ -258,7 +261,7 @@ homekit[IP]==0.15.0
 # homeassistant.components.homematicip_cloud
 homematicip==0.10.15
 
-# homeassistant.components.google
+# homeassistant.components.Google
 # homeassistant.components.remember_the_milk
 httplib2==0.10.3
 
@@ -326,14 +329,14 @@ nuheat==0.3.0
 # homeassistant.components.trend
 numpy==1.17.4
 
-# homeassistant.components.google
+# homeassistant.components.Google
 oauth2client==4.0.0
 
 # homeassistant.components.mqtt
 # homeassistant.components.shiftr
 paho-mqtt==1.5.0
 
-# homeassistant.components.aruba
+# homeassistant.components.Aruba
 # homeassistant.components.cisco_ios
 # homeassistant.components.pandora
 # homeassistant.components.unifi_direct
@@ -342,6 +345,14 @@ pexpect==4.6.0
 # homeassistant.components.pilight
 pilight==0.1.1
 
+<<<<<<< HEAD
+=======
+# homeassistant.components.Proxy
+# homeassistant.components.image_processing
+# homeassistant.components.qrcode
+pillow==6.2.1
+
+>>>>>>> rebuilt of AEH integration
 # homeassistant.components.plex
 plexapi==3.3.0
 
@@ -373,7 +384,7 @@ pure-python-adb==0.2.2.dev0
 # homeassistant.components.pushbullet
 pushbullet.py==0.11.0
 
-# homeassistant.components.canary
+# homeassistant.components.Canary
 py-canary==0.5.0
 
 # homeassistant.components.melissa
@@ -385,7 +396,7 @@ py17track==2.2.2
 # homeassistant.components.tplink
 pyHS100==0.3.5
 
-# homeassistant.components.met
+# homeassistant.components.MET
 # homeassistant.components.norway_air
 pyMetno==0.4.6
 
@@ -440,12 +451,17 @@ pyfritzhome==0.4.0
 # homeassistant.components.ifttt
 pyfttt==0.3
 
+<<<<<<< HEAD
 # homeassistant.components.bluetooth_le_tracker
 # homeassistant.components.skybeacon
 pygatt[GATTTOOL]==4.0.5
 
 # homeassistant.components.version
 pyhaversion==3.2.0
+=======
+# homeassistant.components.VERSION
+pyhaversion==3.1.0
+>>>>>>> rebuilt of AEH integration
 
 # homeassistant.components.heos
 pyheos==0.6.0
