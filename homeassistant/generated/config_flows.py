@@ -14,6 +14,7 @@ FLOWS = [
     "ambient_station",
     "axis",
     "brother",
+    "azure_event_hub",
     "cast",
     "cert_expiry",
     "coolmaster",

@@ -345,14 +345,6 @@ pexpect==4.6.0
 # homeassistant.components.pilight
 pilight==0.1.1
 
-<<<<<<< HEAD
-=======
-# homeassistant.components.Proxy
-# homeassistant.components.image_processing
-# homeassistant.components.qrcode
-pillow==6.2.1
-
->>>>>>> rebuilt of AEH integration
 # homeassistant.components.plex
 plexapi==3.3.0
 
@@ -451,17 +443,12 @@ pyfritzhome==0.4.0
 # homeassistant.components.ifttt
 pyfttt==0.3
 
-<<<<<<< HEAD
 # homeassistant.components.bluetooth_le_tracker
 # homeassistant.components.skybeacon
 pygatt[GATTTOOL]==4.0.5
 
 # homeassistant.components.version
 pyhaversion==3.2.0
-=======
-# homeassistant.components.VERSION
-pyhaversion==3.1.0
->>>>>>> rebuilt of AEH integration
 
 # homeassistant.components.heos
 pyheos==0.6.0

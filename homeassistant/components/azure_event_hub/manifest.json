@@ -5,6 +5,8 @@
   "requirements": [
     "azure-eventhub==5.0.0b5"
   ],
+  "ssdp": [],
+  "homekit": {},
   "dependencies": [],
   "codeowners": [
     "@eavanvalkenburg"
