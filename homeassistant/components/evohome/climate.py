@@ -1,5 +1,6 @@
 """Support for Climate devices of (EMEA/EU-based) Honeywell TCC systems."""
 from datetime import datetime as dt
+import pytz
 import logging
 from typing import List, Optional
 
@@ -170,7 +171,7 @@ class EvoZone(EvoChild, EvoClimateDevice):
             return
 
         # otherwise it is SVC_SET_ZONE_OVERRIDE
-        temp = round(data[ATTR_ZONE_TEMP] * self.precision) / self.precision
+        temp = round(round(data[ATTR_ZONE_TEMP] / self.precision) * self.precision, 1)
         temp = max(min(temp, self.max_temp), self.min_temp)
 
         if ATTR_DURATION_UNTIL in data:
@@ -184,7 +185,9 @@ class EvoZone(EvoChild, EvoClimateDevice):
             until = None  # indefinitely
 
         await self._evo_broker.call_client_api(
-            self._evo_device.set_temperature(temperature=temp, until=until)
+            self._evo_device.set_temperature(
+                temperature=temp, until=until.astimezone(pytz.utc)
+            )
         )
 
     @property
