@@ -24,6 +24,32 @@ except ImportError:
     credstash = None
 
 
+try:
+    from azure.keyvault.secrets import SecretClient
+    from azure.identity import DefaultAzureCredential
+    from azure.core.exceptions import (
+        ClientAuthenticationError,
+        HttpResponseError,
+        ResourceNotFoundError,
+    )
+
+    az_credential = DefaultAzureCredential()  # pylint: disable=invalid-name
+    keyvault_uri = (
+        "https://" + os.environ["KEYVAULT_NAME"] + ".vault.azure.net"
+    )  # pylint: disable=invalid-name
+    kv_client = SecretClient(
+        vault_url=keyvault_uri, credential=az_credential
+    )  # pylint: disable=invalid-name
+    kv_client.list_properties_of_secrets()
+    keyvault = True  # pylint: disable=invalid-name
+except (
+    ImportError,
+    ClientAuthenticationError,
+    HttpResponseError,
+    ResourceNotFoundError,
+):  # pylint: disable=import-error, no-member
+    keyvault = False  # pylint: disable=invalid-name
+
 # mypy: allow-untyped-calls, no-warn-return-any
 
 JSON_TYPE = Union[List, Dict, str]  # pylint: disable=invalid-name
@@ -296,7 +322,6 @@ def secret_yaml(loader: SafeLineLoader, node: yaml.nodes.Node) -> JSON_TYPE:
             return pwd
 
     global credstash  # pylint: disable=invalid-name
-
     if credstash:
         # pylint: disable=no-member
         try:
@@ -309,6 +334,19 @@ def secret_yaml(loader: SafeLineLoader, node: yaml.nodes.Node) -> JSON_TYPE:
         except Exception:  # pylint: disable=broad-except
             # Catch if package installed and no config
             credstash = None
+
+    global keyvault  # pylint: disable=invalid-name
+    if keyvault:
+        try:
+            pwd = kv_client.get_secret(name=node.value).value
+            if pwd:
+                _LOGGER.debug("Secret %s retrieved from keyvault", node.value)
+                return pwd
+        except ResourceNotFoundError:
+            pass
+        except Exception:  # pylint: disable=broad-except
+            # Catch if package installed and no config
+            keyvault = False
 
     raise HomeAssistantError(f"Secret {node.value} not defined")
 

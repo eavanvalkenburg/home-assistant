@@ -294,6 +294,27 @@ def load_yaml(fname, string):
         return load_yaml_config_file(fname)
 
 
+class FakeKeyVaultSecret:
+    """Fake a keyvault secret class."""
+
+    def __init__(self, name, value):
+        """Create FakeKeyVaultSecret."""
+        self.name = name
+        self.value = value
+
+
+class FakeKeyVaultClient:
+    """Fake a keyvault client class."""
+
+    def __init__(self, secrets_dict):
+        """Store keyring dictionary."""
+        self._secrets = secrets_dict
+
+    def get_secret(self, name):
+        """Retrieve password."""
+        return self._secrets.get(name)
+
+
 class FakeKeyring:
     """Fake a keyring class."""
 
@@ -414,6 +435,16 @@ class TestSecrets(unittest.TestCase):
         _yaml = load_yaml(self._yaml_path, yaml_str)
         log = logging.getLogger()
         log.error(_yaml["http"])
+        assert {"api_password": "yeah"} == _yaml["http"]
+
+    def test_secrets_keyvault(self):
+        """Test keyvault fallback & get_password."""
+        yaml_loader.keyvault = True
+        yaml_loader.kv_client = FakeKeyVaultClient(
+            {"http_pw_keyvault": FakeKeyVaultSecret("http_pw_keyvault", "yeah")}
+        )
+        yaml_str = "http:\n  api_password: !secret http_pw_keyvault"
+        _yaml = load_yaml(self._yaml_path, yaml_str)
         assert {"api_password": "yeah"} == _yaml["http"]
 
     def test_secrets_logger_removed(self):

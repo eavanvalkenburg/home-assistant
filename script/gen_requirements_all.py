@@ -21,6 +21,7 @@ COMMENT_REQUIREMENTS = (
     "bluepy",
     "bme680",
     "credstash",
+    "keyvault",
     "decora",
     "envirophat",
     "evdev",
