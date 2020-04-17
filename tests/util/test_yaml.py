@@ -23,6 +23,14 @@ def mock_credstash():
         yield mock_credstash
 
 
+@pytest.fixture(autouse=False)
+def mock_secret_client():
+    """Mock keyvault so it doesn't connect to the internet."""
+    with patch.object(yaml_loader, "SecretClient") as mock_secret_client:
+        mock_secret_client.get_secret.value.return_value = None
+        yield mock_secret_client
+
+
 def test_simple_list():
     """Test simple list."""
     conf = "config:\n  - simple\n  - list"
@@ -306,12 +314,16 @@ class FakeKeyVaultSecret:
 class FakeKeyVaultClient:
     """Fake a keyvault client class."""
 
-    def __init__(self, secrets_dict):
-        """Store keyring dictionary."""
+    def __init__(self, secrets_dict=None):
+        """Store secrets dictionary."""
+        self._secrets = secrets_dict
+
+    def set_secrets(self, secrets_dict):
+        """Store secrets dictionary."""
         self._secrets = secrets_dict
 
     def get_secret(self, name):
-        """Retrieve password."""
+        """Retrieve secret."""
         return self._secrets.get(name)
 
 
@@ -437,14 +449,17 @@ class TestSecrets(unittest.TestCase):
         log.error(_yaml["http"])
         assert {"api_password": "yeah"} == _yaml["http"]
 
-    def test_secrets_keyvault(self):
+    @patch.object(yaml_loader, "SecretClient")
+    def test_secrets_keyvault(self, mock_secret_client):
         """Test keyvault fallback & get_password."""
-        yaml_loader.keyvault = True
-        yaml_loader.kv_client = FakeKeyVaultClient(
+        mock_secret_client.return_value = FakeKeyVaultClient(
             {"http_pw_keyvault": FakeKeyVaultSecret("http_pw_keyvault", "yeah")}
         )
+        yaml_loader.keyvault = True
         yaml_str = "http:\n  api_password: !secret http_pw_keyvault"
         _yaml = load_yaml(self._yaml_path, yaml_str)
+        log = logging.getLogger()
+        log.debug(_yaml["http"])
         assert {"api_password": "yeah"} == _yaml["http"]
 
     def test_secrets_logger_removed(self):

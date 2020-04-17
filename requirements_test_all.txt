@@ -124,7 +124,7 @@ av==6.1.2
 axis==25
 
 # homeassistant.scripts.keyvault
-azure-keyvault==4.0.0
+# azure-keyvault==4.0.0
 
 # homeassistant.scripts.keyvault
 azure.identity==1.3.0

@@ -23,8 +23,9 @@ try:
 except ImportError:
     credstash = None
 
-
 try:
+    keyvault_name = os.environ.get("KEYVAULT_NAME")  # pylint: disable=invalid-name
+    keyvault = True  # pylint: disable=invalid-name
     from azure.keyvault.secrets import SecretClient
     from azure.identity import DefaultAzureCredential
     from azure.core.exceptions import (
@@ -32,22 +33,7 @@ try:
         HttpResponseError,
         ResourceNotFoundError,
     )
-
-    az_credential = DefaultAzureCredential()  # pylint: disable=invalid-name
-    keyvault_uri = (
-        "https://" + os.environ["KEYVAULT_NAME"] + ".vault.azure.net"
-    )  # pylint: disable=invalid-name
-    kv_client = SecretClient(
-        vault_url=keyvault_uri, credential=az_credential
-    )  # pylint: disable=invalid-name
-    kv_client.list_properties_of_secrets()
-    keyvault = True  # pylint: disable=invalid-name
-except (
-    ImportError,
-    ClientAuthenticationError,
-    HttpResponseError,
-    ResourceNotFoundError,
-):  # pylint: disable=import-error, no-member
+except ImportError:
     keyvault = False  # pylint: disable=invalid-name
 
 # mypy: allow-untyped-calls, no-warn-return-any
@@ -335,17 +321,25 @@ def secret_yaml(loader: SafeLineLoader, node: yaml.nodes.Node) -> JSON_TYPE:
             # Catch if package installed and no config
             credstash = None
 
-    global keyvault  # pylint: disable=invalid-name
+    global keyvault, keyvault_name  # pylint: disable=invalid-name
     if keyvault:
         try:
+            kv_client = SecretClient(
+                vault_url=f"https://{keyvault_name}.vault.azure.net",
+                credential=DefaultAzureCredential(),
+            )
             pwd = kv_client.get_secret(name=node.value).value
             if pwd:
                 _LOGGER.debug("Secret %s retrieved from keyvault", node.value)
                 return pwd
-        except ResourceNotFoundError:
+        except ResourceNotFoundError:  # Catch unable to find the key.
             pass
-        except Exception:  # pylint: disable=broad-except
-            # Catch if package installed and no config
+        except (  # pylint: disable=broad-except
+            ClientAuthenticationError,
+            HttpResponseError,
+            Exception,
+        ):
+            # Catch is unable to authenticate, or if credential doesn't have access to the keyvault
             keyvault = False
 
     raise HomeAssistantError(f"Secret {node.value} not defined")
