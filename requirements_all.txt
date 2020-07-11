@@ -1264,6 +1264,9 @@ pyHS100==0.3.5.2
 # homeassistant.components.met_eireann
 pyMetEireann==0.2
 
+# homeassistant.components.indego
+pyIndego==2.0.26
+
 # homeassistant.components.met
 # homeassistant.components.norway_air
 pyMetno==0.8.3
