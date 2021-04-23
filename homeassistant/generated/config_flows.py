@@ -38,6 +38,7 @@ FLOWS = [
     "braviatv",
     "broadlink",
     "brother",
+    "brunt",
     "bsblan",
     "buienradar",
     "canary",
