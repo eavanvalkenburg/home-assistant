@@ -132,7 +132,6 @@ omit =
     homeassistant/components/brunt/__init__.py
     homeassistant/components/brunt/cover.py
     homeassistant/components/brunt/const.py
-    homeassistant/components/brunt/__init__.py
     homeassistant/components/bsblan/__init__.py
     homeassistant/components/bsblan/climate.py
     homeassistant/components/bsblan/const.py
