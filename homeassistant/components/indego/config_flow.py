@@ -54,7 +54,7 @@ class IndegoConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is None:
             return self.async_show_form(
                 step_id="user",
-                data_schema=create_schema(user_input),
+                data_schema=create_schema(),
             )
         await self.async_set_unique_id(user_input[CONF_USERNAME])
         self._abort_if_unique_id_configured()

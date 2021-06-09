@@ -33,7 +33,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hub = hass.data[DOMAIN][entry.entry_id] = IndegoHub(hass, entry)
     await hub.async_setup_hub()
     await hub.async_group_first_refresh()
-
     hass.config_entries.async_setup_platforms(entry, PLATFORMS)
 
     async def async_send_command(call):

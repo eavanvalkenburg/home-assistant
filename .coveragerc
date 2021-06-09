@@ -482,6 +482,11 @@ omit =
     homeassistant/components/insteon/switch.py
     homeassistant/components/insteon/utils.py
     homeassistant/components/incomfort/*
+    homeassistant/components/indego/__init__.py
+    homeassistant/components/indego/config_flow.py
+    homeassistant/components/indego/const.py
+    homeassistant/components/indego/hub.py
+    homeassistant/components/indego/sensor.py
     homeassistant/components/intesishome/*
     homeassistant/components/ios/*
     homeassistant/components/iota/*

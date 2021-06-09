@@ -73,49 +73,31 @@ class IndegoBaseSensor(RestoreEntity, CoordinatorEntity):
     ) -> None:
         """Initialize a Base Indego sensor."""
         super().__init__(coordinator)
-        _LOGGER.warning(
-            "Coordinator is %s, with type %s", self.coordinator, type(self.coordinator)
-        )
         assert hub._serial
         self._serial: str = hub._serial
-        if hub._mower_name:
-            self._mower_name: str = hub._mower_name
-        else:
-            self._mower_name: str = hub._serial
+        self._mower_name: str = hub._mower_name
         self._hub: IndegoHub = hub
         self._attr_state: StateType = None
-        self.coordinator: Any = None
 
     @abstractmethod
-    def async_handle_state_update(self):
+    def async_handle_state_update(self) -> None:
         """Abstract method to be implemented by the subclasses."""
 
     async def async_added_to_hass(self) -> None:
         """Once the sensor is added, see if it was there before and pull in that state."""
         await super().async_added_to_hass()
-        _LOGGER.warning(
-            "Coordinator is %s, with type %s", self.coordinator, type(self.coordinator)
-        )
         state = await self.async_get_last_state()
         if state is not None and state.state is not None:
             self._attr_state = state.state
-        if self.coordinator is not None:
-            self.async_on_remove(
-                self.coordinator.async_add_listener(self.async_handle_state_update)
-            )
+        self.async_on_remove(
+            self.coordinator.async_add_listener(self.async_handle_state_update)
+        )
 
     @property
     def device_info(self) -> DeviceInfo:
         """Return the device_info."""
-        assert self.name is not None
         return {
-            "name": self.name,
-            "identifiers": {(DOMAIN, self._serial)},
-            "manufacturer": "Bosch",
-            "suggested_area": "garden",
-            "model": self._hub.indego.generic_data.model_description,
-            "sw_version": self._hub.indego.generic_data.alm_firmware_version,
-            "via_device": (DOMAIN, self._serial),
+            "connections": {(DOMAIN, self._serial)},
         }
 
 
@@ -130,9 +112,13 @@ class IndegoMowerState(IndegoBaseSensor):
         self._attr_icon = "mdi:robot-mower-outline"
 
     @callback
-    def async_handle_state_update(self):
+    def async_handle_state_update(self) -> None:
         """Handle the state update of the coordinator."""
-        self._attr_state = self.coordinator.data["state"]
+        self._attr_state = self.coordinator.data["state_description"]
+        self._attr_extra_state_attributes = {
+            ATTR_STATE_NUMBER: self.coordinator.data["state"].state
+        }
+        self.async_write_ha_state()
 
 
 class IndegoMowerStateDetail(IndegoBaseSensor):
@@ -146,12 +132,13 @@ class IndegoMowerStateDetail(IndegoBaseSensor):
         self._attr_icon = "mdi:robot-mower-outline"
 
     @callback
-    def async_handle_state_update(self):
+    def async_handle_state_update(self) -> None:
         """Handle the state update of the coordinator."""
         self._attr_state = self.coordinator.data["state_description_detail"]
         self._attr_extra_state_attributes = {
             ATTR_STATE_NUMBER: self.coordinator.data["state"].state
         }
+        self.async_write_ha_state()
 
 
 class IndegoBattery(IndegoBaseSensor):
@@ -167,7 +154,7 @@ class IndegoBattery(IndegoBaseSensor):
         self._attr_icon = "mdi:battery"
 
     @callback
-    def async_handle_state_update(self):
+    def async_handle_state_update(self) -> None:
         """Handle the state update of the coordinator."""
         battery: Battery = self.coordinator.data.battery
         self._attr_state = battery.percent_adjusted
@@ -183,6 +170,7 @@ class IndegoBattery(IndegoBaseSensor):
             ATTR_BATTERY_TEMP: battery.battery_temp,
             ATTR_AMBIENT_TEMP: battery.ambient_temp,
         }
+        self.async_write_ha_state()
 
 
 class IndegoLawnMowed(IndegoBaseSensor):
@@ -197,7 +185,7 @@ class IndegoLawnMowed(IndegoBaseSensor):
         self._attr_unit_of_measurement = "%"
 
     @callback
-    def async_handle_state_update(self):
+    def async_handle_state_update(self) -> None:
         """Handle the state update of the coordinator."""
         state: State = self.coordinator.data["state"]
         self._attr_state = state.mowed
@@ -206,6 +194,7 @@ class IndegoLawnMowed(IndegoBaseSensor):
             ATTR_LAST_SESSION_CUT_MIN: state.runtime.session.cut,
             ATTR_LAST_SESSION_CHARGE_MIN: state.runtime.session.charge,
         }
+        self.async_write_ha_state()
 
 
 class IndegoLastCompleted(IndegoBaseSensor):
@@ -213,7 +202,7 @@ class IndegoLastCompleted(IndegoBaseSensor):
 
     def __init__(self, entry, hub) -> None:
         """Initialize Last Completed Sensor."""
-        super().__init__(coordinator=hub.duc_generic, entry=entry, hub=hub)
+        super().__init__(coordinator=hub.duc_last_completed_mow, entry=entry, hub=hub)
         self._attr_name = f"{self._mower_name} Last Completed"
         self._attr_unique_id = f"{self._serial}_last_completed"
         self._attr_icon = "mdi:calendar-check"
@@ -221,9 +210,10 @@ class IndegoLastCompleted(IndegoBaseSensor):
         self._attr_unit_of_measurement = "ISO8601"
 
     @callback
-    def async_handle_state_update(self):
+    def async_handle_state_update(self) -> None:
         """Handle the state update of the coordinator."""
-        self._attr_state = self.coordinator.data["last_completed_mow"].isoformat()
+        self._attr_state = self.coordinator.data.isoformat()
+        self.async_write_ha_state()
 
 
 class IndegoNextMow(IndegoBaseSensor):
@@ -231,7 +221,7 @@ class IndegoNextMow(IndegoBaseSensor):
 
     def __init__(self, entry, hub) -> None:
         """Initialize Last Completed Sensor."""
-        super().__init__(coordinator=hub.duc_generic, entry=entry, hub=hub)
+        super().__init__(coordinator=hub.duc_next_mow, entry=entry, hub=hub)
         self._attr_name = f"{self._mower_name} Next Mow"
         self._attr_unique_id = f"{self._serial}_next_mow"
         self._attr_icon = "mdi:calendar-clock"
@@ -239,9 +229,10 @@ class IndegoNextMow(IndegoBaseSensor):
         self._attr_unit_of_measurement = "ISO8601"
 
     @callback
-    def async_handle_state_update(self):
+    def async_handle_state_update(self) -> None:
         """Handle the state update of the coordinator."""
-        self._attr_state = self.coordinator.data["next_mow"].isoformat()
+        self._attr_state = self.coordinator.data.isoformat()
+        self.async_write_ha_state()
 
 
 class IndegoMowingMode(IndegoBaseSensor):
@@ -255,9 +246,10 @@ class IndegoMowingMode(IndegoBaseSensor):
         self._attr_icon = "mdi:alpha-m-circle-outline"
 
     @callback
-    def async_handle_state_update(self):
+    def async_handle_state_update(self) -> None:
         """Handle the state update of the coordinator."""
-        self._attr_state = self.coordinator.data["generic_data"].mowing_mode_description
+        self._attr_state = self.coordinator.data.mowing_mode_description
+        self.async_write_ha_state()
 
 
 class IndegoMowtimeTotal(IndegoBaseSensor):
@@ -272,7 +264,7 @@ class IndegoMowtimeTotal(IndegoBaseSensor):
         self._attr_unit_of_measurement = "h"
 
     @callback
-    def async_handle_state_update(self):
+    def async_handle_state_update(self) -> None:
         """Handle the state update of the coordinator."""
         state: State = self.coordinator.data["state"]
         self._attr_state = state.runtime.total.cut
@@ -280,6 +272,7 @@ class IndegoMowtimeTotal(IndegoBaseSensor):
             ATTR_TOTAL_OPERATION_TIME: state.runtime.total.operate,
             ATTR_TOTAL_CHARGING_TIME: state.runtime.total.charge,
         }
+        self.async_write_ha_state()
 
 
 class IndegoXPosition(IndegoBaseSensor):
@@ -293,9 +286,10 @@ class IndegoXPosition(IndegoBaseSensor):
         self._attr_icon = "mdi:crosshairs-gps"
 
     @callback
-    def async_handle_state_update(self):
+    def async_handle_state_update(self) -> None:
         """Handle the state update of the coordinator."""
         self._attr_state = self.coordinator.data["state"].xPos
+        self.async_write_ha_state()
 
 
 class IndegoYPosition(IndegoBaseSensor):
@@ -309,6 +303,7 @@ class IndegoYPosition(IndegoBaseSensor):
         self._attr_icon = "mdi:crosshairs-gps"
 
     @callback
-    def async_handle_state_update(self):
+    def async_handle_state_update(self) -> None:
         """Handle the state update of the coordinator."""
         self._attr_state = self.coordinator.data["state"].yPos
+        self.async_write_ha_state()
