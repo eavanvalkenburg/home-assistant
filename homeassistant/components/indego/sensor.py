@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from abc import abstractmethod
 import logging
-from typing import Any
 
 from pyIndego.states import Battery, State
 
@@ -73,11 +72,18 @@ class IndegoBaseSensor(RestoreEntity, CoordinatorEntity):
     ) -> None:
         """Initialize a Base Indego sensor."""
         super().__init__(coordinator)
-        assert hub._serial
-        self._serial: str = hub._serial
-        self._mower_name: str = hub._mower_name
         self._hub: IndegoHub = hub
         self._attr_state: StateType = None
+
+    @property
+    def _serial(self) -> str:
+        """Return the serial of the mower."""
+        return self._hub.serial
+
+    @property
+    def _mower_name(self) -> str:
+        """Return the mower name of the mower."""
+        return self._hub.mower_name
 
     @abstractmethod
     def async_handle_state_update(self) -> None:
@@ -149,7 +155,7 @@ class IndegoBattery(IndegoBaseSensor):
         super().__init__(coordinator=hub.duc_operating_data, entry=entry, hub=hub)
         self._attr_device_class = DEVICE_CLASS_BATTERY
         self._attr_unit_of_measurement = "%"
-        self._attr_name = f"{self._mower_name} battery %"
+        self._attr_name = f"{self._mower_name} Battery %"
         self._attr_unique_id = f"{self._serial}_battery"
         self._attr_icon = "mdi:battery"
 
@@ -158,6 +164,7 @@ class IndegoBattery(IndegoBaseSensor):
         """Handle the state update of the coordinator."""
         battery: Battery = self.coordinator.data.battery
         self._attr_state = battery.percent_adjusted
+        assert isinstance(self._attr_state, int)
         self._attr_icon = icon_for_battery_level(
             self._attr_state,
             self._hub.indego.state_description_detail == "Charging",

@@ -4,13 +4,16 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta
 import logging
+import urllib.error
 
+from aiohttp import ClientError
 from pyIndego import IndegoAsyncClient
 from pyIndego.states import Alert, GenericData, OperatingData, State
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
@@ -42,6 +45,7 @@ class IndegoHub:
         self.duc_next_mow: DataUpdateCoordinator | None = None
         self.duc_updates_available: DataUpdateCoordinator | None = None
         self._latest_alert = None
+        self._refresh_state_task: asyncio.Task | None = None
 
     async def async_setup_hub(self) -> None:
         """Login to the api."""
@@ -60,9 +64,9 @@ class IndegoHub:
         device_registry = await dr.async_get_registry(self._hass)
         device_registry.async_get_or_create(
             config_entry_id=self._entry.entry_id,
-            identifiers={(DOMAIN, self._serial)},
-            connections={(DOMAIN, self._serial)},
-            name=f"Bosch Indego Mower - {self._mower_name}",
+            identifiers={(DOMAIN, self.serial)},
+            connections={(DOMAIN, self.serial)},
+            name=f"Bosch Indego Mower - {self.mower_name}",
             manufacturer="Bosch",
             model=self.indego.generic_data.model_description,
             sw_version=self.indego.generic_data.alm_firmware_version,
@@ -133,44 +137,71 @@ class IndegoHub:
         """
         assert self.duc_alerts
         assert self.duc_generic
+        assert self.duc_last_completed_mow
+        assert self.duc_next_mow
         assert self.duc_operating_data
-        assert self.duc_state
         assert self.duc_updates_available
-        not_ready = await asyncio.gather(
+        results = await asyncio.gather(
             *[
                 self.duc_alerts.async_config_entry_first_refresh(),
                 self.duc_generic.async_config_entry_first_refresh(),
                 self.duc_last_completed_mow.async_config_entry_first_refresh(),
                 self.duc_next_mow.async_config_entry_first_refresh(),
                 self.duc_operating_data.async_config_entry_first_refresh(),
-                self.duc_state.async_config_entry_first_refresh(),
                 self.duc_updates_available.async_config_entry_first_refresh(),
             ],
             return_exceptions=True,
         )
-        for item in not_ready:
+        for item in results:
             if isinstance(item, Exception):
                 raise item
+        assert self.duc_state
+        try:
+            await self.indego.update_state(longpoll=False)
+        except (asyncio.TimeoutError, ClientError, urllib.error.URLError) as err:
+            self.duc_state.last_exception = err
+            self.duc_state.last_update_success = False
+            _LOGGER.error("State not ready.")
+            ex = ConfigEntryNotReady()
+            ex.__cause__ = err
+            raise ex
+        except Exception as err:  # pylint: disable=broad-except
+            self.last_exception = err
+            self.last_update_success = False
+        self.duc_state.async_set_updated_data(
+            {
+                "state": self.indego.state,
+                "state_description": self.indego.state_description,
+                "state_description_detail": self.indego.state_description_detail,
+            }
+        )
 
     async def async_shutdown(self, *_) -> None:
         """Remove all future updates, cancel tasks and close the client."""
+        if self._refresh_state_task:
+            self._refresh_state_task.cancel()
+            await self._refresh_state_task
+        # TODO: remove once new version of package is out, this closes the aiohttp session
         await self.indego.close()
 
     async def refresh_state(self) -> dict[str, State | str | None]:
         """Update the state, if necessary update operating data and recall itself."""
         # TODO: check cancelling when shutting down
+        # self._refresh_state_task = asyncio.create_task(
         await self.indego.update_state(longpoll=True, longpoll_timeout=300)
-        if self.indego.state:
-            state = self.indego.state.state
-            if (500 <= state <= 799) or (state in (257, 260)):
+        # )
+        # await self._refresh_state_task
+        if state := self.indego.state:
+            state_id = state.state
+            if (500 <= state_id <= 799) or (state_id in (257, 260)):
                 assert self.duc_operating_data
                 await self.duc_operating_data.async_request_refresh()
-            if self.indego.state.error != self._latest_alert:
-                self._latest_alert = self.indego.state.error
+            if state.error != self._latest_alert:
+                self._latest_alert = state.error
                 assert self.duc_alerts
                 await self.duc_alerts.async_request_refresh()
         return {
-            "state": self.indego.state,
+            "state": state,
             "state_description": self.indego.state_description,
             "state_description_detail": self.indego.state_description_detail,
         }
@@ -204,3 +235,15 @@ class IndegoHub:
         """Refresh Indego updates available."""
         await self.indego.update_updates_available()
         return self.indego.update_available
+
+    @property
+    def serial(self) -> str:
+        """Return the serial of the mower."""
+        assert self._serial
+        return self._serial
+
+    @property
+    def mower_name(self) -> str:
+        """Return the mower_name of the mower."""
+        assert self._mower_name
+        return self._mower_name
