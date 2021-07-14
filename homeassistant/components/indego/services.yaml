@@ -10,3 +10,8 @@ smartmowing:
     enable:
       description: Enable Smart Mow
       example: "true"
+download_map:
+  description: Download map into config/www/ directory, extension will be added as svg
+  fields:
+    filename:
+      description: Optional filename without extension, default indego_map

@@ -4,12 +4,18 @@ from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 DOMAIN = "indego"
 DATA_UPDATED = f"{DOMAIN}_data_updated"
 CONF_ATTR = "attributes"
-ATTR_SEND_COMMAND = "command"
-ATTR_SMARTMOWING = "enable"
+CONF_DOWNLAD_MAP = "filename"
+
+CONF_SEND_COMMAND = "command"
+CONF_SMARTMOWING = "enable"
 DEFAULT_NAME = "Indego"
 DEFAULT_NAME_COMMANDS = None
+DEFAULT_MAP_NAME = "indego_map"
+
 SERVICE_NAME_COMMAND = "command"
 SERVICE_NAME_SMARTMOW = "smartmowing"
+SERVICE_NAME_DOWNLOAD_MAP = "download_map"
+
 PLATFORMS = [SENSOR_DOMAIN]
 
 ATTR_STATE_NUMBER = "state_number"
