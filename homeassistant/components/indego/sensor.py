@@ -31,7 +31,10 @@ from .const import (
     ATTR_LAST_SESSION_CHARGE_MIN,
     ATTR_LAST_SESSION_CUT_MIN,
     ATTR_LAST_SESSION_OPERATION_MIN,
-    ATTR_STATE_NUMBER,
+    ATTR_MAP_UPDATE_AVAILABLE,
+    ATTR_STATE_ID,
+    ATTR_SVG_X_POS,
+    ATTR_SVG_Y_POS,
     ATTR_TOTAL_CHARGING_TIME,
     ATTR_TOTAL_OPERATION_TIME,
     DOMAIN,
@@ -122,7 +125,7 @@ class IndegoMowerState(IndegoBaseSensor):
         """Handle the state update of the coordinator."""
         self._attr_state = self.coordinator.data["state_description"]
         self._attr_extra_state_attributes = {
-            ATTR_STATE_NUMBER: self.coordinator.data["state"].state
+            ATTR_STATE_ID: self.coordinator.data["state"].state
         }
         self.async_write_ha_state()
 
@@ -142,7 +145,7 @@ class IndegoMowerStateDetail(IndegoBaseSensor):
         """Handle the state update of the coordinator."""
         self._attr_state = self.coordinator.data["state_description_detail"]
         self._attr_extra_state_attributes = {
-            ATTR_STATE_NUMBER: self.coordinator.data["state"].state
+            ATTR_STATE_ID: self.coordinator.data["state"].state
         }
         self.async_write_ha_state()
 
@@ -167,7 +170,7 @@ class IndegoBattery(IndegoBaseSensor):
         assert isinstance(self._attr_state, int)
         self._attr_icon = icon_for_battery_level(
             self._attr_state,
-            self._hub.indego.state_description_detail == "Charging",
+            self._hub.indego.state.state in (257, 260),
         )
         # TODO: check unit of temps
         self._attr_extra_state_attributes = {
@@ -296,6 +299,12 @@ class IndegoXPosition(IndegoBaseSensor):
     def async_handle_state_update(self) -> None:
         """Handle the state update of the coordinator."""
         self._attr_state = self.coordinator.data["state"].xPos
+        self._attr_extra_state_attributes = {
+            ATTR_MAP_UPDATE_AVAILABLE: self.coordinator.data[
+                "state"
+            ].map_update_available,
+            ATTR_SVG_X_POS: self.coordinator.data["state"].svg_xPos,
+        }
         self.async_write_ha_state()
 
 
@@ -313,4 +322,10 @@ class IndegoYPosition(IndegoBaseSensor):
     def async_handle_state_update(self) -> None:
         """Handle the state update of the coordinator."""
         self._attr_state = self.coordinator.data["state"].yPos
+        self._attr_extra_state_attributes = {
+            ATTR_MAP_UPDATE_AVAILABLE: self.coordinator.data[
+                "state"
+            ].map_update_available,
+            ATTR_SVG_Y_POS: self.coordinator.data["state"].svg_yPos,
+        }
         self.async_write_ha_state()

@@ -18,7 +18,7 @@ SERVICE_NAME_DOWNLOAD_MAP = "download_map"
 
 PLATFORMS = [SENSOR_DOMAIN]
 
-ATTR_STATE_NUMBER = "state_number"
+ATTR_STATE_ID = "state_id"
 ATTR_DISCHARGE = "discharge"
 ATTR_CYCLES = "cycles"
 ATTR_BATTERY_TEMP = "battery_temp"
@@ -28,3 +28,6 @@ ATTR_LAST_SESSION_CUT_MIN = "last_session_cut_min"
 ATTR_LAST_SESSION_CHARGE_MIN = "last_session_charge_min"
 ATTR_TOTAL_OPERATION_TIME = "total_operation_time_h"
 ATTR_TOTAL_CHARGING_TIME = "total_charging_time_h"
+ATTR_SVG_X_POS = "svg_xpos"
+ATTR_SVG_Y_POS = "svg_ypos"
+ATTR_MAP_UPDATE_AVAILABLE = "map_update_available"

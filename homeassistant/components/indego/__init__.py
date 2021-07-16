@@ -2,12 +2,16 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EVENT_HOMEASSISTANT_START
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
+
+# from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
@@ -38,11 +42,10 @@ SERVICE_SCHEMA_DOWNLOAD_MAP = vol.Schema(
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Indego from a config entry."""
     hass.data.setdefault(DOMAIN, {})
-    hub = hass.data[DOMAIN][entry.entry_id] = IndegoHub(
-        hass, entry, async_get_clientsession(hass)
-    )
+    cs = async_get_clientsession(hass)
+    # cs._timeout = 600
+    hub = hass.data[DOMAIN][entry.entry_id] = IndegoHub(hass, entry, cs)
     await hub.async_setup_hub()
-    await hub.async_group_first_refresh()
     hass.config_entries.async_setup_platforms(entry, PLATFORMS)
 
     async def async_send_command(call):
@@ -57,11 +60,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await hass.data[DOMAIN][entry.entry_id].indego.put_mow_mode(name)
         await hass.data[DOMAIN][entry.entry_id].duc_generic.async_request_refresh()
 
+    Path(hass.config.path("www")).mkdir(exist_ok=True)
+
     async def async_download_map(call):
         name = call.data.get(CONF_DOWNLAD_MAP, DEFAULT_MAP_NAME)
-        filename = hass.config.path(f"www/{name}.svg")
         _LOGGER.debug("Indego.download_map service called")
-        await hass.data[DOMAIN][entry.entry_id].download_map(filename)
+        await hass.data[DOMAIN][entry.entry_id].download_map(
+            hass.config.path(f"www/{name}.svg")
+        )
 
     hass.services.async_register(
         DOMAIN, SERVICE_NAME_COMMAND, async_send_command, SERVICE_SCHEMA_COMMAND
@@ -78,6 +84,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         async_download_map,
         SERVICE_SCHEMA_DOWNLOAD_MAP,
     )
+    hass.bus.async_listen_once(EVENT_HOMEASSISTANT_START, hub.async_group_first_refresh)
+    # hass.async_create_task(hub.async_group_first_refresh)
+    # hass.async_add_job(hub.async_group_first_refresh)
+    # await hub.async_group_first_refresh()
     return True
 
 

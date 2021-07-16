@@ -4,22 +4,23 @@ from __future__ import annotations
 import asyncio
 from datetime import timedelta
 import logging
-import urllib.error
 
-from aiohttp import ClientError, ClientSession
+from aiohttp import ClientSession
 from pyIndego import IndegoAsyncClient
 from pyIndego.states import State
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, EVENT_HOMEASSISTANT_STOP
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+
+STATE_LONGPOLL_TIMEOUT_REGULAR = 300
+STATE_LONGPOLL_TIMEOUT_OPERATIONAL = 10
 
 
 class IndegoHub:
@@ -36,6 +37,8 @@ class IndegoHub:
 
         self._serial: str | None = None
         self._mower_name: str | None = None
+        self._state_longpoll_timeout = STATE_LONGPOLL_TIMEOUT_REGULAR
+        self._state_use_longpoll = True
         self.indego = IndegoAsyncClient(
             self._username,
             self._password,
@@ -81,7 +84,7 @@ class IndegoHub:
             self._hass,
             _LOGGER,
             name=f"{DOMAIN}_{self._serial}_state",
-            update_interval=timedelta(seconds=1),
+            update_interval=None,  # timedelta(seconds=1),
             update_method=self.refresh_state,
         )
         self.duc_operating_data = DataUpdateCoordinator(
@@ -126,13 +129,14 @@ class IndegoHub:
             update_interval=timedelta(hours=24),
             update_method=self.indego.get_updates_available,
         )
+        self.duc_state.async_add_listener(self._handle_update_state)
         self._entry.async_on_unload(
             self._hass.bus.async_listen_once(
                 EVENT_HOMEASSISTANT_STOP, self.async_shutdown
             )
         )
 
-    async def async_group_first_refresh(self) -> None:
+    async def async_group_first_refresh(self, _) -> None:
         """Refresh data for the first time when a config entry is setup.
 
         Will automatically raise ConfigEntryNotReady if the refresh
@@ -145,6 +149,7 @@ class IndegoHub:
         assert self.duc_next_mow
         assert self.duc_operating_data
         assert self.duc_updates_available
+        assert self.duc_state
         results = await asyncio.gather(
             *[
                 self.duc_alerts.async_config_entry_first_refresh(),
@@ -153,25 +158,13 @@ class IndegoHub:
                 self.duc_next_mow.async_config_entry_first_refresh(),
                 self.duc_operating_data.async_config_entry_first_refresh(),
                 self.duc_updates_available.async_config_entry_first_refresh(),
+                self.indego.update_state(longpoll=False),
             ],
             return_exceptions=True,
         )
         for item in results:
             if isinstance(item, Exception):
                 raise item
-        assert self.duc_state
-        try:
-            await self.indego.update_state(longpoll=False)
-        except (asyncio.TimeoutError, ClientError, urllib.error.URLError) as err:
-            self.duc_state.last_exception = err
-            self.duc_state.last_update_success = False
-            _LOGGER.error("State not ready.")
-            ex = ConfigEntryNotReady()
-            ex.__cause__ = err
-            raise ex
-        except Exception as err:  # pylint: disable=broad-except
-            self.last_exception = err
-            self.last_update_success = False
         self.duc_state.async_set_updated_data(
             {
                 "state": self.indego.state,
@@ -186,32 +179,50 @@ class IndegoHub:
             self._refresh_state_task.cancel()
             await self._refresh_state_task
 
-    async def refresh_state(self) -> dict[str, State | str | None]:
-        """Update the state, if necessary update operating data and recall itself."""
-        # TODO: check cancelling when shutting down
-        # self._refresh_state_task = asyncio.create_task(
-        state = await self.indego.get_state(longpoll=True, longpoll_timeout=300)
-        # )
-        # await self._refresh_state_task
+    @callback
+    def _handle_update_state(self):
+        """Call update state after it has finished."""
+        _LOGGER.debug("Callback of state update")
+        assert self.duc_state
+        state = self.duc_state.data["state"]
         if state:
             _LOGGER.debug("New state of indego: %s", state)
             state_id = state.state
             if (500 <= state_id <= 799) or (state_id in (257, 260)):
+                _LOGGER.debug("Requesting operating data update")
                 assert self.duc_operating_data
-                await self.duc_operating_data.async_request_refresh()
+                self._hass.create_task(self.duc_operating_data.async_request_refresh())
+                self._state_longpoll_timeout = STATE_LONGPOLL_TIMEOUT_OPERATIONAL
+                # self._state_use_longpoll = False
+            else:
+                # self._state_use_longpoll = True
+                self._state_longpoll_timeout = STATE_LONGPOLL_TIMEOUT_REGULAR
             if state.error != self._latest_alert:
                 self._latest_alert = state.error
                 assert self.duc_alerts
-                await self.duc_alerts.async_request_refresh()
+                self._hass.create_task(self.duc_alerts.async_request_refresh())
+        self._hass.create_task(self.duc_state.async_request_refresh())
+
+    async def refresh_state(self) -> dict[str, State | str | None]:
+        """Update the state, if necessary update operating data and recall itself."""
+        _LOGGER.debug("Starting state update")
+        # TODO: check cancelling when shutting down
+        self._refresh_state_task = self._hass.async_create_task(
+            self.indego.update_state(
+                longpoll=self._state_use_longpoll,
+                longpoll_timeout=self._state_longpoll_timeout,
+            )
+        )
+        await self._refresh_state_task
         return {
-            "state": state,
+            "state": self.indego.state,
             "state_description": self.indego.state_description,
             "state_description_detail": self.indego.state_description_detail,
         }
 
     async def download_map(self, filename: str):
         """Download the map of the lawn."""
-        _LOGGER.debug(f"Downloading map to {filename}")
+        _LOGGER.debug("Downloading map to %s", filename)
         await self.indego.download_map(filename)
 
     @property
