@@ -1,5 +1,6 @@
 """The brunt component."""
-import asyncio
+from __future__ import annotations
+
 import logging
 
 from aiohttp.client_exceptions import ClientResponseError, ServerDisconnectedError
@@ -18,7 +19,7 @@ PLATFORMS = ["cover"]
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup(hass: HomeAssistant, config: dict):
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Component setup, run import config flow for each entry in config."""
     if DOMAIN not in config:
         return True
@@ -31,7 +32,7 @@ async def async_setup(hass: HomeAssistant, config: dict):
     return True
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Brunt using config flow."""
     hass.data.setdefault(DOMAIN, {})
     session = async_get_clientsession(hass)
@@ -58,16 +59,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    unload_ok = all(
-        await asyncio.gather(
-            *[
-                hass.config_entries.async_forward_entry_unload(entry, component)
-                for component in PLATFORMS
-            ]
-        )
-    )
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
     return unload_ok
