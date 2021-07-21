@@ -95,7 +95,7 @@ class BruntDevice(CoordinatorEntity, CoverEntity):
         thing: Thing,
         bapi: BruntClientAsync,
         entry_id: str,
-    ):
+    ) -> None:
         """Init the Brunt device."""
         super().__init__(coordinator)
         self._unique_id = serial
