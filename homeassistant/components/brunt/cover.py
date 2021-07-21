@@ -1,4 +1,6 @@
 """Support for Brunt Blind Engine covers."""
+from __future__ import annotations
+
 from datetime import timedelta
 import logging
 
@@ -17,6 +19,8 @@ from homeassistant.components.cover import (
 from homeassistant.const import ATTR_ATTRIBUTION
 from homeassistant.core import callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
@@ -96,10 +100,9 @@ class BruntDevice(CoordinatorEntity, CoverEntity):
         super().__init__(coordinator)
         self._unique_id = serial
         self._bapi = bapi
-        self._state = {}
+        self._state: StateType = None
         self._thing = thing
         self._entry_id = entry_id
-        self._remove_update_listener = None
 
     async def async_added_to_hass(self) -> None:
         """When entity is added to hass."""
@@ -220,11 +223,11 @@ class BruntDevice(CoordinatorEntity, CoverEntity):
             self.coordinator.update_interval = FAST_INTERVAL
 
     @property
-    def device_info(self) -> dict:
+    def device_info(self) -> DeviceInfo:
         """Return the device_info."""
         return {
-            "identifiers": {(DOMAIN, self.unique_id)},
             "name": self.name,
+            "identifiers": {(DOMAIN, self.unique_id)},
             "via_device": (DOMAIN, self._entry_id),
             "manufacturer": "Brunt",
             "sw_version": self._thing.FW_VERSION,
