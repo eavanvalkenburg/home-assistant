@@ -20,7 +20,6 @@ from homeassistant.const import ATTR_ATTRIBUTION
 from homeassistant.core import callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
@@ -100,7 +99,6 @@ class BruntDevice(CoordinatorEntity, CoverEntity):
         super().__init__(coordinator)
         self._unique_id = serial
         self._bapi = bapi
-        self._state: StateType = None
         self._thing = thing
         self._entry_id = entry_id
 
